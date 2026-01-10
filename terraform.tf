@@ -57,12 +57,14 @@ resource "aws_s3_object" "MinecraftStartScriptObject" {
   bucket = aws_s3_bucket.MinecraftData.name
   source = "src/ec2/scripts/start-server.sh"
   key    = "scripts/start-server.sh"
+  etag   = filemd5("src/ec2/scripts/start-server.sh")
 }
 
 resource "aws_s3_object" "MinecraftStopScriptObject" {
   bucket = aws_s3_bucket.MinecraftData.name
-  source = "src/ec2/scripts/stop-server.sh"
-  key    = "scripts/stop-server.sh"
+  source = "src/ec2/scripts/stop-server.py"
+  key    = "scripts/stop-server.py"
+  etag   = filemd5("src/ec2/scripts/stop-server.py")
 }
 
 # Upload the Minecraft server services to S3
@@ -70,20 +72,15 @@ resource "aws_s3_object" "MinecraftStartServerServiceObject" {
   bucket = aws_s3_bucket.MinecraftData.name
   source = "src/ec2/services/start-minecraft.service"
   key    = "services/start-minecraft.service"
-}
-
-resource "aws_s3_object" "MinecraftStopServerServiceObject" {
-  bucket = aws_s3_bucket.MinecraftData.name
-  source = "src/ec2/services/stop-minecraft.service"
-  key    = "services/stop-minecraft.service"
+  etag   = filemd5("src/ec2/services/start-minecraft.service")
 }
 
 # Upload the minecraft server profile to S3
 resource "aws_s3_object" "MinecraftServerProfileObject" {
   bucket = aws_s3_bucket.MinecraftData.name
-  source = "src/ec2/minecraft_server_profile.zip"
+  source = "minecraft_server_profile.zip"
   key    = "profiles/minecraft_server_profile.zip"
-  etag   = filemd5("src/ec2/minecraft_server_profile.zip")
+  etag   = filemd5("minecraft_server_profile.zip")
 }
 
 # ------------------------------------------------------
@@ -210,70 +207,67 @@ resource "aws_apigatewayv2_integration" "StartServerIntegration" {
 # --------------------------------------------
 
 # Get the Ubuntu 24.04 AMI
-data "aws_ami" "Ubuntu2404AMI" {
-  most_recent = true
+# data "aws_ami" "Ubuntu2404AMI" {
+#   most_recent = true
 
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-*"]
-  }
+#   filter {
+#     name   = "name"
+#     values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-*"]
+#   }
 
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
+#   filter {
+#     name   = "virtualization-type"
+#     values = ["hvm"]
+#   }
 
-  owners = ["099720109477"]
-}
+#   owners = ["099720109477"]
+# }
 
-variable "MinecraftEC2InstanceUserData" {
-  type    = string
-  default = <<-EOF
-                #!/bin/bash
-                
-                # Update and install necessary packages
-                apt-get update -y
-                apt-get install -y awscli unzip python3
+# variable "MinecraftEC2InstanceUserData" {
+#   type    = string
+#   default = <<-EOF
+#                 #!/bin/bash
 
-                # Pull the start script from S3
-                aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/scripts/start-server.sh /home/ubuntu/start-server.sh
-                chmod +x /home/ubuntu/start-server.sh
-                
-                # Pull the stop script from S3
-                aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/scripts/server-stop.sh /home/ubuntu/server-stop.sh
-                chmod +x /home/ubuntu/server-stop.sh
+#                 # Update and install necessary packages
+#                 apt-get update -y
+#                 apt-get install -y awscli unzip python3
 
-                # Pull the start service from S3
-                aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/services/${aws_s3_object.MinecraftStartServerServiceObject.key} /etc/systemd/system/start-server.service
+#                 # Pull the start script from S3
+#                 aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/scripts/start-server.sh /home/ubuntu/start-server.sh
+#                 chmod +x /home/ubuntu/start-server.sh
 
-                # Pull the stop service from S3
-                aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/services/${aws_s3_object.MinecraftStopServerServiceObject.key} /etc/systemd/system/stop-server.service
+#                 # Pull the stop script from S3
+#                 aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/scripts/stop-server.py /home/ubuntu/stop-server.py
+#                 chmod +x /home/ubuntu/stop-server.py
 
-                # Enable the services to run at startup
-                systemctl enable start-server.service
-                systemctl enable stop-server.service
+#                 # Pull the start service from S3
+#                 aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/services/${aws_s3_object.MinecraftStartServerServiceObject.key} /etc/systemd/system/start-server.service
 
-                # Download the Minecraft Profile from S3
-                aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/profiles/${aws_s3_object.MinecraftServerProfileObject.key} /opt/minecraft_server_profiles/
+#                 # Enable the services to run at startup
+#                 systemctl enable start-server.service
 
-                # Setup the profile
-                unzip /opt/minecraft_server_profiles/${aws_s3_object.MinecraftServerProfileObject.key} \ 
-                -d ${replace("/opt/minecraft_servers/${aws_s3_object.MinecraftServerProfileObject.key}", ".zip", "")}
+#                 # Download the Minecraft Profile from S3
+#                 aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/profiles/${aws_s3_object.MinecraftServerProfileObject.key} /opt/minecraft_server_profiles/
 
-                # Run the java install script
-                chmod +x /opt/minecraft_servers/${replace(aws_s3_object.MinecraftServerProfileObject.key, ".zip", "")}/install_java.sh
-                bash /opt/minecraft_servers/${replace(aws_s3_object.MinecraftServerProfileObject.key, ".zip", "")}/install_java.sh
-                
-                EOF
-}
+#                 # Setup the profile
+#                 unzip /opt/minecraft_server_profiles/${aws_s3_object.MinecraftServerProfileObject.key} \ 
+#                 -d ${replace("/opt/minecraft_servers/${aws_s3_object.MinecraftServerProfileObject.key}", ".zip", "")}
+
+#                 # Run the java install script
+#                 chmod +x /opt/minecraft_servers/${replace(aws_s3_object.MinecraftServerProfileObject.key, ".zip", "")}/install_java.sh
+#                 bash /opt/minecraft_servers/${replace(aws_s3_object.MinecraftServerProfileObject.key, ".zip", "")}/install_java.sh
+
+#                 EOF
+# }
 
 
-resource "aws_instance" "MinecraftEC2Instance" {
-  instance_type = "t4g.large"
-  ami           = data.aws_ami.Ubuntu2404AMI.id
-  user_data     = var.MinecraftEC2InstanceUserData.default
+# resource "aws_instance" "MinecraftEC2Instance" {
+#   instance_type = "t4g.large"
+#   ami           = data.aws_ami.Ubuntu2404AMI.id
+#   user_data     = var.MinecraftEC2InstanceUserData.default
 
-  tags = {
-    IsMinecraftInstance = "true"
-  }
-}
+
+#   tags = {
+#     IsMinecraftInstance = "true"
+#   }
+# }

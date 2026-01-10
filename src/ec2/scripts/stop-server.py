@@ -9,134 +9,273 @@ Please refer to docs found here for Protocol details:
 """
 
 import asyncio
+from dataclasses import dataclass
+import json
 import os
-import socket
+import random
+import struct
+import subprocess
+import psutil
 
-from anyio import sleep
+PLAYER_CHECK_INTERVAL = int(os.getenv("PLAYER_CHECK_INTERVAL", "60"))
+SERVER_PID = int(os.getenv("SERVER_PID", "-1"))
+INSTANCE_ID = os.getenv("INSTANCE_ID", "i-0123456789abcdef0")
 
-# Define constants and load them from the environment
-HOST = os.getenv('MINECRAFT_SERVER_HOST', "127.0.0.1")
-SERVER_PORT = int(os.getenv('MINECRAFT_SERVER_PORT', "25574"))
-RCON_PORT = int(os.getenv('MINECRAFT_SERVER_RCON_PORT', "25575"))
-PLAYER_COUNT_INTERVAL = int(os.getenv('PLAYER_COUNT_INTERVAL_SECONDS', "5"))
-
-
-"""
-Creates a minecraft 1.6 server list ping packet.
-
-Returns:
-    bytes: The constructed server list ping packet.
-"""
-def create_16_server_list_ping_packet() -> bytes:
-    packet_id = b'\xfe'
-    server_list_ping_payload = b'\x01'
-    packet_id_plugin_message = b'\xfa'
-    length_of_string = b'\x00\x0b'
-    string_identifier = b"\x00\x4D\x00\x43\x00\x7C\x00\x50\x00\x69\x00\x6E\x00\x67\x00\x48\x00\x6F\x00\x73\x00\x74"
-    length_of_packet_body = str.encode(str(7 + len(HOST)), 'utf-16-be') 
-    protocol_version = b'\x00\x4A'
-    host_code_units = len(HOST).to_bytes(2, byteorder='big')
-    hostname = str.encode(HOST, 'utf-16-be')
-    port = SERVER_PORT.to_bytes(2, byteorder='big')
-
-    return (packet_id + server_list_ping_payload + packet_id_plugin_message 
-            + length_of_string + string_identifier + length_of_packet_body 
-            + protocol_version + host_code_units + hostname + port)
+# Constants for VarInt encoding/decoding
+SEGMENT_BITS = b'\x7F'[0] 
+CONTINUE_BIT = b'\x80'[0]
 
 
-"""
-Parses out the response from a minecraft 1.6 server list ping.
+def encode_varint(value: int) -> bytes:
+    """
+    Encodes an integer into minecrafts VarInt format.
 
-Args:
-    data (bytes): The raw response data from the server.
+    Args:
+        value (int): The integer to encode.
 
-Returns:
-    dict: A dictionary containing the parsed server information.
-"""
-def parse_16_server_list_ping_response(data: bytes) -> dict:
-    BODY_START_DELIMITER = b'\x00\xa7\x00\x31\x00\x00'
-    BODY_START_DELIMITER_LEN = len(BODY_START_DELIMITER)
+    Returns:
+        bytes: The encoded VarInt as bytes.
+    """
+    out = bytearray()
+    while True:
+        if (value & ~SEGMENT_BITS) == 0:
+            out.append(value)
+            return bytes(out)
+        else: 
+            out.append((value & SEGMENT_BITS) | CONTINUE_BIT)
+            value >>= 7
+
+
+def decode_varint(data: bytes) -> int:
+    """
+    Decodes a VarInt from minecraft's format.
+
+    Args:
+        data (bytes): The bytes containing the VarInt.
+
+    Returns:
+        int: The decoded integer.
+    """
+    value = 0
+    shift = 0
+
+    for index in range(len(data)):
+        current_byte = data[index]
+        value |= (current_byte & SEGMENT_BITS) << shift
+
+        if (current_byte & CONTINUE_BIT) == 0:
+            return value
+
+        shift += 7
+        if shift >= 32:
+            raise ValueError("VarInt is too big")
+
+    raise ValueError("Incomplete VarInt")
+
+
+def MakeHandShakePacket(host: str, port: int, next_state: int) -> bytes:
+    """
+    Creates a Handshake packet for the Minecraft protocol.
+
+    Args:
+        host (str): The server hostname.
+        port (int): The server port.
+        next_state (int): The next state (1 for status).
+
+    Returns:
+        bytes: The constructed Handshake packet.
+    """
+    # Create the data required for a Handshake packet
+    packet_id = b'\x00'
+    protocol_version = encode_varint(4) 
+    server_address = encode_varint(len(host)) + host.encode('utf-8')
+    server_port = port.to_bytes(2, byteorder='big')
+    intent = encode_varint(next_state)
+
+    packet_data = (packet_id + protocol_version + server_address + server_port + intent)
+
+    # Packets are prefixed with their length as a VarInt
+    return encode_varint(len(packet_data)) + packet_data
+
+
+def MakeStatusRequestPacket() -> bytes:
+    """
+    Creates a Status Request packet for the Minecraft protocol.
+    """
+    # Create the data required for a Status Request packet
+    packet_id = b'\x00'
+
+    return encode_varint(len(packet_id)) + packet_id
+
+
+@dataclass
+class StatusResponse:
+    """
+    Response structure for the Minecraft server status.
+    """
+    version_name: str
+    version_protocol: int
+    players_max: int
+    players_online: int
+    description: str
+
+
+async def decode_status_response(reader: asyncio.StreamReader) -> StatusResponse:
+    """
+    Decodes the status response from the Minecraft server.
     
-    # Find the start of the body
-    body_start_index = data.find(BODY_START_DELIMITER)
-    header_removed_data = data[body_start_index + BODY_START_DELIMITER_LEN:]
+    Args:
+        reader (asyncio.StreamReader): The stream reader to read data from.
+    
+    Returns:
+        StatusResponse: The decoded status response.
+    """
+    packet_length = decode_varint(await reader.read(3))
+    _ = decode_varint(await reader.read(2))
+    data = (await reader.read(packet_length - 3)).decode('utf-8')
 
-    # Need at least two bytes for protocol version
-    if len(header_removed_data) < 2:
-        raise ValueError("Response data too short to contain protocol version.")
+    json_data = json.loads(data)
+    return StatusResponse(
+        version_name=json_data['version']['name'],
+        version_protocol=json_data['version']['protocol'],
+        players_max=json_data['players']['max'],
+        players_online=json_data['players']['online'],
+        description=json_data['description']
+    )
 
-    protocol_version = int.from_bytes(header_removed_data[0:2], byteorder='big')
-    remaining = header_removed_data[2:]
 
-    decoded = remaining.decode('utf-16-be', errors='replace')
+async def run_player_count_client():
+    """
+    Asynchronously monitors the Minecraft server player count and stops the server and EC2 instance when no players are online.
 
-    # The response fields are separated by a double-null (\x00\x00)
-    parts = decoded.split('\x00\x00')
+    Raises:
+        ConnectionError: If unable to connect to the Minecraft server.
+    """
+    while True:
+        await asyncio.sleep(PLAYER_CHECK_INTERVAL)
+        
+        try:
+            reader, writer = await asyncio.open_connection('localhost', 25565)
+        except Exception as e:
+            print(f"Could not connect to server: {e}")
+            print("Server is likely offline, retrying...")
+            await asyncio.sleep(PLAYER_CHECK_INTERVAL)
+            continue
 
-    server_version = parts[0] if len(parts) > 0 else ''
-    motd = parts[1] if len(parts) > 1 else ''
-    current_players = parts[2] if len(parts) > 2 else '0'
-    max_players = parts[3] if len(parts) > 3 else '0'
+        handshake_packet = MakeHandShakePacket('localhost', 25565, 1)
+        writer.write(handshake_packet)
+        await writer.drain()
 
-    # Clean stray null characters and non-digits from numeric fields
-    server_version = server_version.replace('\x00', '')
-    motd = motd.replace('\x00', '')
-    current_players = current_players.replace('\x00', '')
-    max_players = max_players.replace('\x00', '')
+        status_request_packet = MakeStatusRequestPacket()
+        writer.write(status_request_packet)
+        await writer.drain()
+
+        # Read the response length as a VarInt
+        response = await decode_status_response(reader)
+        
+        if response.players_online == 0:
+            try:
+                await stop_server_command()
+            except Exception as e:
+                print(f"Error stopping server: {e}")
+            finally:
+                writer.close()
+                await writer.wait_closed()
+            return
+
+        # Close the socket connection
+        writer.close()
+        await writer.wait_closed()
+        
+
+async def stop_server_command():
+    """
+    Asynchronously sends the "stop" command to the Minecraft server via RCON.
+    
+    Raises:
+        ConnectionError: If unable to connect to the RCON server.
+        PermissionError: If RCON authentication fails.    
+    """
+    host = os.getenv("RCON_HOST", "localhost")
+    port = int(os.getenv("RCON_PORT", "25575"))
+    password = os.getenv("RCON_PASSWORD", "123456")
 
     try:
-        current_players_i = int(current_players)
-    except Exception:
-        digits = ''.join([c for c in current_players if c.isdigit()])
-        current_players_i = int(digits) if digits else 0
-
+        reader, writer = await asyncio.open_connection(host, port)
+    except Exception as e:
+        print(f"Could not connect to RCON server: {e}")
+        raise ConnectionError("Failed to connect to RCON server") 
+    
     try:
-        max_players_i = int(max_players)
-    except Exception:
-        digits = ''.join([c for c in max_players if c.isdigit()])
-        max_players_i = int(digits) if digits else 0
+        auth_request_id = random.randint(1, 2147483647)
+        auth_id, auth_type, _ = await rcon_send_and_recv(reader, writer, auth_request_id, 3, password)
 
-    return {
-        "protocol_version": protocol_version,
-        "server_version": server_version,
-        "motd": motd,
-        "current_players": current_players_i,
-        "max_players": max_players_i,
-    }
+        # On auth failure, the server responds with request id = -1.
+        if auth_id == -1:
+            raise PermissionError("RCON authentication failed (request id = -1). Check rcon.password")
 
-"""
-Asynchronous client to periodically ping the Minecraft server for player count.
+        if auth_id != auth_request_id or auth_type != 2:
+            raise PermissionError("Unexpected RCON auth response. Check RCON port/password and server config.")
 
-Returns:
-    None
-"""
-async def player_count_client():
-        while True:
-            await sleep(PLAYER_COUNT_INTERVAL)
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-                client_socket.connect((HOST, SERVER_PORT))
-                ping_packet = create_16_server_list_ping_packet()
-                client_socket.sendall(ping_packet)
-                response = client_socket.recv(4096)
-                print("Received server response:", response)
-                server_info = parse_16_server_list_ping_response(response)
-                print("Player Count Info: ", server_info["current_players"])                
+        cmd_request_id = random.randint(1, 2147483647)
+        await rcon_send_and_recv(reader, writer, cmd_request_id, 2, "stop")
+    finally:
+        writer.close()
+        await writer.wait_closed()
 
 
-"""
-Asynchronous function to send a stop command to the Minecraft server via RCON.
+async def rcon_send_and_recv(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    request_id: int,
+    packet_type: int,
+    payload: str,
+) -> tuple[int, int, str]:
+    payload_bytes = payload.encode("ascii")
+    body = struct.pack("<ii", request_id, packet_type) + payload_bytes + b"\x00\x00"
+    writer.write(struct.pack("<i", len(body)) + body)
+    await writer.drain()
 
-Returns:
-    None
-"""
-async def send_stop_command():
-    print("Sending stop command to the server...")
-    print("Stop command functionality not yet implemented.")
-    # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-    #     client_socket.connect((HOST, RCON_PORT))
-    #     # Send the stop command to the server
+    # Read response
+    size_raw = await reader.readexactly(4)
+    (size,) = struct.unpack("<i", size_raw)
+    data = await reader.readexactly(size)
 
+    resp_id, resp_type = struct.unpack("<ii", data[:8])
+    # Payload is everything up to the first null byte after the header
+    payload_end = data.find(b"\x00", 8)
+    resp_payload = data[8:payload_end].decode("ascii", errors="replace") if payload_end != -1 else ""
+    return resp_id, resp_type, resp_payload
+
+async def RunAWSStopInstance():
+    """
+    Stops the EC2 instance using AWS CLI.
+    """
+    try:
+        subprocess.run(["awscli", "ec2", "stop-instances", "--instance-ids", INSTANCE_ID], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to stop EC2 instance: {e}")
+        print("Halting the server instead.")
+        subprocess.run(["shutdown", "-h", "now"])
+
+async def main():
+    await run_player_count_client()
+
+    is_server_running = True
+    while is_server_running:
+        is_server_running = True
+        while is_server_running:
+            await asyncio.sleep(2)
+            for proc in psutil.process_iter(['pid']):
+                if proc.info['pid'] == SERVER_PID:
+                    is_server_running = True
+                    break
+
+    await RunAWSStopInstance()
+    exit(0)    
+    
 
 if __name__ == "__main__":
-    print("Starting player count client...")
-    asyncio.run(player_count_client())
+    # Run the player count monitoring client
+    asyncio.run(main())
+
