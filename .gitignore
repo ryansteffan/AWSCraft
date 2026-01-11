@@ -1,5 +1,20 @@
+# Ignore Terraform state files, plan files, and directories
 .terraform
 .terraform.lock.hcl
-./build/
-./server-profile/
+terraform.tfstate
+terraform.tfstate.backup
+*.plan
+*.tfvars
+
+# Ignore build directories and server profiles
+build/
 server/
+lambda_functions/
+minecraft_server_profile.zip
+
+# Allow for the example tfvars file
+!example.tfvars
+
+# Ignore TS dist and node modules
+src/lambda/**/dist/
+src/lambda/**/node_modules/

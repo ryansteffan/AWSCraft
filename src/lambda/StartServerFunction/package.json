@@ -1,0 +1,19 @@
+{
+	"name": "startserverfunction",
+	"version": "1.0.0",
+	"description": "Starts a minecraft server instance",
+	"license": "ISC",
+	"author": "",
+	"type": "module",
+	"main": "index.js",
+	"scripts": {
+		"prebuild": "rmdir dist",
+		"build": "esbuild index.ts --bundle --minify --sourcemap --platform=node --target=es2020 --outfile=dist/index.js",
+		"postbuild": "cd dist && zip -r index.zip index.js*"
+	},
+	"devDependencies": {
+		"@types/aws-lambda": "^8.10.159",
+		"@types/node": "^25.0.5",
+		"esbuild": "^0.27.2"
+	}
+}

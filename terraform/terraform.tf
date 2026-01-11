@@ -15,6 +15,14 @@ provider "aws" {
   region = "ca-central-1"
 }
 
+# --------- 
+# Variables  
+# ---------
+variable "BucketName" {
+  type        = string
+  description = "A globally unique name for your aws bucket."
+}
+
 # ----------------------------
 # Setup IAM Roles and Policies
 # ----------------------------
@@ -39,7 +47,6 @@ resource "aws_iam_role" "LambdaExecutionRole" {
   name = "LambdaExecutionRole"
 
   assume_role_policy = data.aws_iam_policy_document.LambdaAssumeRolePolicy.json
-
 }
 
 # ------------------------------------------
@@ -49,38 +56,45 @@ resource "aws_iam_role" "LambdaExecutionRole" {
 # TODO: Add bucket policy to allow only EC2 access
 
 resource "aws_s3_bucket" "MinecraftData" {
-  bucket = "minecraft-data-bucket"
+  bucket = var.BucketName
 }
 
 # Upload Minecraft server management scripts to S3
 resource "aws_s3_object" "MinecraftStartScriptObject" {
-  bucket = aws_s3_bucket.MinecraftData.name
-  source = "src/ec2/scripts/start-server.sh"
+  bucket = aws_s3_bucket.MinecraftData.id
+  source = "../src/ec2/scripts/start-server.sh"
   key    = "scripts/start-server.sh"
-  etag   = filemd5("src/ec2/scripts/start-server.sh")
+  etag   = filemd5("../src/ec2/scripts/start-server.sh")
 }
 
 resource "aws_s3_object" "MinecraftStopScriptObject" {
-  bucket = aws_s3_bucket.MinecraftData.name
-  source = "src/ec2/scripts/stop-server.py"
+  bucket = aws_s3_bucket.MinecraftData.id
+  source = "../src/ec2/scripts/stop-server.py"
   key    = "scripts/stop-server.py"
-  etag   = filemd5("src/ec2/scripts/stop-server.py")
+  etag   = filemd5("../src/ec2/scripts/stop-server.py")
 }
 
 # Upload the Minecraft server services to S3
 resource "aws_s3_object" "MinecraftStartServerServiceObject" {
-  bucket = aws_s3_bucket.MinecraftData.name
-  source = "src/ec2/services/start-minecraft.service"
+  bucket = aws_s3_bucket.MinecraftData.id
+  source = "../src/ec2/services/start-minecraft.service"
   key    = "services/start-minecraft.service"
-  etag   = filemd5("src/ec2/services/start-minecraft.service")
+  etag   = filemd5("../src/ec2/services/start-minecraft.service")
+}
+
+# Zip the minecraft server profile
+resource "archive_file" "MinecraftServerProfileZip" {
+  type        = "zip"
+  source_dir  = "../minecraft_server_profile"
+  output_path = "../build/minecraft_server_profile.zip"
 }
 
 # Upload the minecraft server profile to S3
 resource "aws_s3_object" "MinecraftServerProfileObject" {
-  bucket = aws_s3_bucket.MinecraftData.name
-  source = "minecraft_server_profile.zip"
+  bucket = aws_s3_bucket.MinecraftData.id
+  source = archive_file.MinecraftServerProfileZip.output_path
   key    = "profiles/minecraft_server_profile.zip"
-  etag   = filemd5("minecraft_server_profile.zip")
+  etag   = filemd5(archive_file.MinecraftServerProfileZip.output_path)
 }
 
 # ------------------------------------------------------
@@ -94,20 +108,20 @@ variable "LambdaEnv" {
 
 data "archive_file" "ListInstancesFunctionCode" {
   type        = "zip"
-  source_file = "src/lambda/ListInstancesFunction/build/index.js"
-  output_path = "lambda_functions/list_instances.zip"
+  source_dir  = "../src/lambda/ListInstancesFunction/dist"
+  output_path = "../build/lambda_functions/list_instances.zip"
 }
 
 data "archive_file" "ServerStatusFunctionCode" {
   type        = "zip"
-  source_file = "src/lambda/ServerStatusFunction/build/index.js"
-  output_path = "lambda_functions/server_status.zip"
+  source_dir  = "../src/lambda/ServerStatusFunction/dist"
+  output_path = "../build/lambda_functions/server_status.zip"
 }
 
 data "archive_file" "StartServerFunctionCode" {
   type        = "zip"
-  source_file = "src/lambda/StartServerFunction/build/index.js"
-  output_path = "lambda_functions/start_server.zip"
+  source_dir  = "../src/lambda/StartServerFunction/dist"
+  output_path = "../build/lambda_functions/start_server.zip"
 }
 
 resource "aws_lambda_function" "ListInstancesFunction" {
@@ -165,21 +179,6 @@ resource "aws_apigatewayv2_api" "MinecraftAPI" {
   protocol_type = "HTTP"
 }
 
-resource "aws_apigatewayv2_route" "ListInstancesEndpoint" {
-  api_id    = aws_apigatewayv2_api.MinecraftAPI.id
-  route_key = "/list-instances"
-}
-
-resource "aws_apigatewayv2_route" "ServerStatusEndpoint" {
-  api_id    = aws_apigatewayv2_api.MinecraftAPI.id
-  route_key = "/status"
-}
-
-resource "aws_apigatewayv2_route" "StartServerEndpoint" {
-  api_id    = aws_apigatewayv2_api.MinecraftAPI.id
-  route_key = "/start"
-}
-
 # Attache the routes to lambda functions
 resource "aws_apigatewayv2_integration" "ListInstancesIntegration" {
   api_id             = aws_apigatewayv2_api.MinecraftAPI.id
@@ -200,6 +199,57 @@ resource "aws_apigatewayv2_integration" "StartServerIntegration" {
   integration_type   = "AWS_PROXY"
   integration_uri    = aws_lambda_function.StartServerFunction.arn
   integration_method = "POST"
+}
+
+resource "aws_apigatewayv2_route" "ListInstancesEndpoint" {
+  api_id    = aws_apigatewayv2_api.MinecraftAPI.id
+  route_key = "GET /list-instances"
+
+  target = "integrations/${aws_apigatewayv2_integration.ListInstancesIntegration.id}"
+}
+
+resource "aws_apigatewayv2_route" "ServerStatusEndpoint" {
+  api_id    = aws_apigatewayv2_api.MinecraftAPI.id
+  route_key = "GET /status"
+
+  target = "integrations/${aws_apigatewayv2_integration.ServerStatusIntegration.id}"
+}
+
+resource "aws_apigatewayv2_route" "StartServerEndpoint" {
+  api_id    = aws_apigatewayv2_api.MinecraftAPI.id
+  route_key = "POST /start"
+
+  target = "integrations/${aws_apigatewayv2_integration.StartServerIntegration.id}"
+}
+
+resource "aws_apigatewayv2_stage" "MinecraftAPIProductionStage" {
+  name        = "MinecraftAPIProd"
+  api_id      = aws_apigatewayv2_api.MinecraftAPI.id
+  auto_deploy = true
+}
+
+resource "aws_lambda_permission" "AllowApiGatewayInvokeListInstances" {
+  statement_id  = "AllowExecutionFromApiGatewayListInstances"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ListInstancesFunction.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.MinecraftAPI.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "AllowApiGatewayInvokeServerStatus" {
+  statement_id  = "AllowExecutionFromApiGatewayServerStatus"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ServerStatusFunction.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.MinecraftAPI.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "AllowApiGatewayInvokeStartServer" {
+  statement_id  = "AllowExecutionFromApiGatewayStartServer"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.StartServerFunction.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.MinecraftAPI.execution_arn}/*/*"
 }
 
 # --------------------------------------------
