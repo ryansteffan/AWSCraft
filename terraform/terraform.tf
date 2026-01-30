@@ -23,11 +23,20 @@ variable "BucketName" {
   description = "A globally unique name for your aws bucket."
 }
 
+
+# ----------------------------------
+# Setup logging for lambda functions
+# ----------------------------------
+resource "aws_cloudwatch_log_group" "MinecraftLambdaLogGroup" {
+  name              = "/aws/lambda/MinecraftLambdaFunctions"
+  retention_in_days = 14
+}
+
 # ----------------------------
 # Setup IAM Roles and Policies
 # ----------------------------
 
-# Lambda Function Role
+# Basic Lambda execution role
 data "aws_iam_policy_document" "LambdaAssumeRolePolicy" {
   statement {
     effect = "Allow"
@@ -43,10 +52,51 @@ data "aws_iam_policy_document" "LambdaAssumeRolePolicy" {
   }
 }
 
+# Policy document for logging from Lambda to CloudWatch
+data "aws_iam_policy_document" "LambdaLogPolicyDocument" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+
+    resources = ["arn:aws:logs:*:*:*"]
+  }
+}
+
+# Create the IAM role for Lambda to have access to EC2
+data "aws_iam_policy_document" "LambdaEC2AccessPolicyDocument" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ec2:DescribeInstances",
+    ]
+
+    resources = ["*"]
+  }
+}
+
+# Attach the basic policy and make the role
 resource "aws_iam_role" "LambdaExecutionRole" {
   name = "LambdaExecutionRole"
 
   assume_role_policy = data.aws_iam_policy_document.LambdaAssumeRolePolicy.json
+}
+
+# Attach the logging and EC2 access policies to the role
+resource "aws_iam_role_policy" "LambdaExecutionRolePolicy" {
+  name   = "LambdaExecutionRolePolicy"
+  role   = aws_iam_role.LambdaExecutionRole.id
+  policy = data.aws_iam_policy_document.LambdaLogPolicyDocument.json
+}
+resource "aws_iam_role_policy" "LambdaEC2AccessRolePolicy" {
+  name   = "LambdaEC2AccessRolePolicy"
+  role   = aws_iam_role.LambdaExecutionRole.id
+  policy = data.aws_iam_policy_document.LambdaEC2AccessPolicyDocument.json
 }
 
 # ------------------------------------------
@@ -85,17 +135,17 @@ resource "aws_s3_object" "MinecraftStartServerServiceObject" {
 # Zip the minecraft server profile
 resource "archive_file" "MinecraftServerProfileZip" {
   type        = "zip"
-  source_dir  = "../minecraft_server_profile"
+  source_dir  = "../server/"
   output_path = "../build/minecraft_server_profile.zip"
 }
 
 # Upload the minecraft server profile to S3
-resource "aws_s3_object" "MinecraftServerProfileObject" {
-  bucket = aws_s3_bucket.MinecraftData.id
-  source = archive_file.MinecraftServerProfileZip.output_path
-  key    = "profiles/minecraft_server_profile.zip"
-  etag   = filemd5(archive_file.MinecraftServerProfileZip.output_path)
-}
+# resource "aws_s3_object" "MinecraftServerProfileObject" {
+#   bucket = aws_s3_bucket.MinecraftData.id
+#   source = archive_file.MinecraftServerProfileZip.output_path
+#   key    = "profiles/minecraft_server_profile.zip"
+#   etag   = filemd5(archive_file.MinecraftServerProfileZip.output_path)
+# }
 
 # ------------------------------------------------------
 # Setup Lambda Functions for Minecraft Server Management
@@ -103,6 +153,7 @@ resource "aws_s3_object" "MinecraftServerProfileObject" {
 variable "LambdaEnv" {
   type = map(string)
   default = {
+    # AWS_REGION = "ca-central-1"
   }
 }
 
@@ -136,6 +187,13 @@ resource "aws_lambda_function" "ListInstancesFunction" {
   environment {
     variables = var.LambdaEnv
   }
+
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.MinecraftLambdaLogGroup.name
+  }
+
+  depends_on = [aws_iam_role.LambdaExecutionRole, aws_cloudwatch_log_group.MinecraftLambdaLogGroup]
 }
 
 resource "aws_lambda_function" "ServerStatusFunction" {
@@ -150,6 +208,13 @@ resource "aws_lambda_function" "ServerStatusFunction" {
   environment {
     variables = var.LambdaEnv
   }
+
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.MinecraftLambdaLogGroup.name
+  }
+
+  depends_on = [aws_iam_role.LambdaExecutionRole, aws_cloudwatch_log_group.MinecraftLambdaLogGroup]
 }
 
 resource "aws_lambda_function" "StartServerFunction" {
@@ -164,6 +229,13 @@ resource "aws_lambda_function" "StartServerFunction" {
   environment {
     variables = var.LambdaEnv
   }
+
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.MinecraftLambdaLogGroup.name
+  }
+
+  depends_on = [aws_iam_role.LambdaExecutionRole, aws_cloudwatch_log_group.MinecraftLambdaLogGroup]
 }
 
 # -------------------------------------------------

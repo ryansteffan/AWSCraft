@@ -31,3 +31,6 @@ terraform plan -var-file="../.tfvars" -out="deployment.plan"
 
 # Apply the terraform deployment plan
 terraform apply "deployment.plan"
+
+# Wait for user input before closing
+read -p "Press [Enter] key to exit..."
