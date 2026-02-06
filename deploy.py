@@ -2,12 +2,14 @@ from datetime import datetime
 import os
 import shutil
 import subprocess
-import zipfile
+
+from utils import Check_Command_Availability, Prompt_AWS_Login
 
 BUILD_DIR = "./build"
 SERVER_DIR = "./server"
 LAMBDA_DIR = "./src/lambda"
 TERRAFORM_DIR = "./terraform"
+TERRAFORM_PLAN_NAME = "terraform.tfplan"
 # NOTE: Ensure that the BACKUP_DIR is changed in the ./destroy.py file as well
 BACKUP_DIR = "./backup"
 
@@ -47,78 +49,14 @@ def main():
         return
     
     # Ensure that the required commands are installed
-    # Check for terraform
-    try:
-        subprocess.run(["terraform", "-version"], 
-                       check=True, 
-                       stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL)
-    except Exception as e:
-        print("Terraform is not installed or not found in PATH." +
-        " Please install Terraform to proceed.")
-    # Check for npm
-    try:
-        # shell=True for Windows compatibility
-        subprocess.run(["npm", "-v"], 
-                       check=True, 
-                       shell=True, 
-                       stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL)
-    except Exception as e:
-        print("npm is not installed or not found in PATH. " +
-        "Please install npm to proceed.")
-    # Check for AWS
-    try:
-        subprocess.run(["aws", "--version"], 
-                       check=True,
-                       stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL)
-    except Exception as e:
-        print("AWS CLI is not installed or not found in PATH. " +
-        "Please install AWS CLI to proceed.")
+    if not Check_Command_Availability():
+        return
 
     print("Preliminary checks complete.")
 
     # Require AWS login
-    print("Please login to your AWS account...")
-    print("NOTE: It is recommended that you make a NON-ROOT user with appropriate " +
-          "permissions for deploying resources.")
-    print("Details can be found here: https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html")
-    print("------------------------------------")
-    print("AWS Login Methods:")
-    print("------------------------------------")
-    print("1. AWS Login (Recommended & Default)")
-    print("2. AWS Configure")
-    print("3. AWS SSO Login (Coming Soon)")
-    print("4. Other (Use your own method to login outside of this script)")
-    print("------------------------------------")
-
-    login_result = input("Please select a login method you wish to use (Default 1): ")
-    match login_result:
-        case "2":
-            print("Running 'aws configure'...")
-            try:
-                subprocess.run(["aws", "configure"], check=True)
-                print("AWS configured successfully.")
-            except subprocess.CalledProcessError as e:
-                print(f"Error during AWS configure: {e}")
-                print("Aborting deployment process.")
-                return
-        case "3":
-            print("AWS SSO Login is not yet implemented. Please use another method.")
-            return
-        case "4":
-            print("Please use your preferred method to login to AWS outside of this script.")
-            input("Press Enter once you have logged in to continue...")
-        case _:
-            print("Running 'aws login'...")
-            try:
-                subprocess.run(["aws", "login"], check=True)
-                print("AWS login successful.")
-            except subprocess.CalledProcessError as e:
-                print(f"Error during AWS login: {e}")
-                print("Aborting deployment process.")
-                return
+    if not Prompt_AWS_Login():
+        return
 
     # Build all of the lambda functions
     print("Building lambda functions...")
@@ -145,7 +83,8 @@ def main():
         return
     print("Planning terraform deployment...")
     try:
-        subprocess.run(["terraform", "plan", "-var-file=.tfvars"], cwd=TERRAFORM_DIR, check=True)
+        subprocess.run(["terraform", "plan", "-var-file=.tfvars", f"-out={TERRAFORM_PLAN_NAME}"], 
+                       cwd=TERRAFORM_DIR, check=True)
     except subprocess.CalledProcessError as e:
         print(f"Error planning terraform deployment: {e}")
         print("Aborting deployment process.")
@@ -156,7 +95,7 @@ def main():
     if do_deployment.lower() == 'y' or do_deployment.lower() == 'yes':
         print("Deploying with terraform...")
         try:
-           subprocess.run(["terraform", "apply", "-var-file=.tfvars"], cwd=TERRAFORM_DIR, check=True)
+           subprocess.run(["terraform", "apply", "-var-file=.tfvars", TERRAFORM_PLAN_NAME], cwd=TERRAFORM_DIR, check=True)
         except subprocess.CalledProcessError as e:
             print(f"Error during terraform deployment: {e}")
             print("Aborting deployment process.")
@@ -171,7 +110,7 @@ def main():
     if backup_choice.lower() == 'y' or backup_choice.lower() == 'yes':
         if not os.path.exists(BACKUP_DIR):
             os.makedirs(BACKUP_DIR)
-        backup_path = os.path.join(BACKUP_DIR, f"{datetime.now()}_terraform_backup")
+        backup_path = os.path.join(BACKUP_DIR, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_terraform_backup")
         print(f"Creating backup at {backup_path}...")
         try:
             shutil.make_archive(backup_path, 'zip', TERRAFORM_DIR)
