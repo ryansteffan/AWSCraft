@@ -132,19 +132,18 @@ resource "aws_s3_object" "MinecraftStartServerServiceObject" {
   etag   = filemd5("../src/ec2/services/start-minecraft.service")
 }
 
-# Zip the minecraft server profile
-resource "archive_file" "MinecraftServerProfileZip" {
+# Zip the server profile and upload to S3
+data "archive_file" "MinecraftServerProfileArchive" {
   type        = "zip"
   source_dir  = "../server"
-  output_path = "../build/minecraft_server_profile.zip"
+  output_path = "../build/minecraft_server_profiles/DefaultMinecraftProfile.zip"
 }
 
-# Upload the minecraft server profile to S3
-resource "aws_s3_object" "MinecraftServerProfileObject" {
+resource "aws_s3_object" "MinecraftServerProfile" {
   bucket = aws_s3_bucket.MinecraftData.id
-  source = archive_file.MinecraftServerProfileZip.output_path
-  key    = "profiles/minecraft_server_profile.zip"
-  etag   = filemd5(archive_file.MinecraftServerProfileZip.output_path)
+  source = data.archive_file.MinecraftServerProfileArchive.output_path
+  key    = "profiles/DefaultMinecraftProfile.zip"
+  etag   = filemd5(data.archive_file.MinecraftServerProfileArchive.output_path)
 }
 
 # ------------------------------------------------------
