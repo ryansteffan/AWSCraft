@@ -18,3 +18,6 @@ minecraft_server_profile.zip
 # Ignore TS dist and node modules
 src/lambda/**/dist/
 src/lambda/**/node_modules/
+
+# Ignore a users backup files
+./backup/

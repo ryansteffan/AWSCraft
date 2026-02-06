@@ -135,17 +135,17 @@ resource "aws_s3_object" "MinecraftStartServerServiceObject" {
 # Zip the minecraft server profile
 resource "archive_file" "MinecraftServerProfileZip" {
   type        = "zip"
-  source_dir  = "../server/"
+  source_dir  = "../server"
   output_path = "../build/minecraft_server_profile.zip"
 }
 
 # Upload the minecraft server profile to S3
-# resource "aws_s3_object" "MinecraftServerProfileObject" {
-#   bucket = aws_s3_bucket.MinecraftData.id
-#   source = archive_file.MinecraftServerProfileZip.output_path
-#   key    = "profiles/minecraft_server_profile.zip"
-#   etag   = filemd5(archive_file.MinecraftServerProfileZip.output_path)
-# }
+resource "aws_s3_object" "MinecraftServerProfileObject" {
+  bucket = aws_s3_bucket.MinecraftData.id
+  source = archive_file.MinecraftServerProfileZip.output_path
+  key    = "profiles/minecraft_server_profile.zip"
+  etag   = filemd5(archive_file.MinecraftServerProfileZip.output_path)
+}
 
 # ------------------------------------------------------
 # Setup Lambda Functions for Minecraft Server Management

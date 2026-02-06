@@ -7,9 +7,7 @@
 	"type": "module",
 	"main": "index.js",
 	"scripts": {
-		"prebuild": "rmdir dist",
-		"build": "esbuild index.ts --bundle --minify --sourcemap --platform=node --target=es2020 --outfile=dist/index.js",
-		"postbuild": "cd dist && zip -r index.zip index.js*"
+		"build": "esbuild index.ts --bundle --minify --sourcemap --platform=node --target=es2020 --outfile=dist/index.js"
 	},
 	"devDependencies": {
 		"@types/aws-lambda": "^8.10.159",
