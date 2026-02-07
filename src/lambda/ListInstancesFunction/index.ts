@@ -5,10 +5,19 @@ import {
 	TagSpecification$,
 } from "@aws-sdk/client-ec2";
 
+type InstanceStatus =
+	| "pending"
+	| "running"
+	| "shutting-down"
+	| "terminated"
+	| "stopping"
+	| "stopped";
+
 interface Instance {
 	instanceId: string;
 	name: string;
 	description: string;
+	status: InstanceStatus;
 	ipAddress: string | undefined;
 	publicDNS: string | undefined;
 }
@@ -61,6 +70,7 @@ export const handler = async (
 				description:
 					instance.Tags?.find((tag) => tag.Key === "Description")
 						?.Value || "No description",
+				status: (instance.State?.Name as InstanceStatus) || "Unknown",
 				ipAddress: instance.PublicIpAddress,
 				publicDNS: instance.PublicDnsName,
 			} satisfies Instance);
