@@ -12,7 +12,7 @@ terraform {
 
 provider "aws" {
   # Set the AWS region to deploy resources in.
-  region = "ca-central-1"
+  region = var.Region
 }
 
 # --------- 
@@ -22,6 +22,35 @@ variable "BucketName" {
   type        = string
   description = "A globally unique name for your aws bucket."
 }
+
+variable "Region" {
+  type        = string
+  description = "The AWS region to deploy the infrastructure in."
+}
+
+variable "AvailabilityZone" {
+  type        = string
+  description = "The availability zone to deploy the EC2 instance and EBS volume in."
+}
+
+variable "InstanceType" {
+  type        = string
+  description = "The EC2 instance type to use for the Minecraft server."
+}
+
+variable "Architecture" {
+  type        = string
+  description = "The architecture of the AMI to use for the Minecraft server."
+}
+
+variable "EBSSize" {
+  type        = number
+  description = "The size of the EBS volume attached to the EC2 instance in GB."
+}
+
+# ----------------------------------------------------
+# Create a VPC for the Minecraft server infrastructure
+# ----------------------------------------------------
 
 
 # ----------------------------------
@@ -327,68 +356,71 @@ resource "aws_lambda_permission" "AllowApiGatewayInvokeStartServer" {
 # Setup instance for running Minecraft servers
 # --------------------------------------------
 
-# Get the Ubuntu 24.04 AMI
-# data "aws_ami" "Ubuntu2404AMI" {
-#   most_recent = true
+# Get the Ubuntu 24.04 AMI for Arm
+data "aws_ami" "Ubuntu2404AMI" {
+  most_recent = true
 
-#   filter {
-#     name   = "name"
-#     values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-*"]
-#   }
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-${var.Architecture}-server-*"]
+  }
 
-#   filter {
-#     name   = "virtualization-type"
-#     values = ["hvm"]
-#   }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 
-#   owners = ["099720109477"]
-# }
+  owners = ["099720109477"]
+}
 
-# variable "MinecraftEC2InstanceUserData" {
-#   type    = string
-#   default = <<-EOF
-#                 #!/bin/bash
+# Create the EC2 instance for the Minecraft server
+resource "aws_instance" "MinecraftServerInstance" {
+  ami               = data.aws_ami.Ubuntu2404AMI.id
+  instance_type     = var.InstanceType
+  availability_zone = var.AvailabilityZone
 
-#                 # Update and install necessary packages
-#                 apt-get update -y
-#                 apt-get install -y awscli unzip python3
+  root_block_device {
+    volume_size           = var.EBSSize
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
 
-#                 # Pull the start script from S3
-#                 aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/scripts/start-server.sh /home/ubuntu/start-server.sh
-#                 chmod +x /home/ubuntu/start-server.sh
+  # user_data     = <<-EOF
+  #               #!/bin/bash
 
-#                 # Pull the stop script from S3
-#                 aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/scripts/stop-server.py /home/ubuntu/stop-server.py
-#                 chmod +x /home/ubuntu/stop-server.py
+  #               # Update and install necessary packages
+  #               apt-get update -y
+  #               apt-get install -y awscli unzip python3
 
-#                 # Pull the start service from S3
-#                 aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/services/${aws_s3_object.MinecraftStartServerServiceObject.key} /etc/systemd/system/start-server.service
+  #               # Pull the start script from S3
+  #               aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/scripts/start-server.sh /home/ubuntu/start-server.sh
+  #               chmod +x /home/ubuntu/start-server.sh
 
-#                 # Enable the services to run at startup
-#                 systemctl enable start-server.service
+  #               # Pull the stop script from S3
+  #               aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/scripts/stop-server.py /home/ubuntu/stop-server.py
+  #               chmod +x /home/ubuntu/stop-server.py
 
-#                 # Download the Minecraft Profile from S3
-#                 aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/profiles/${aws_s3_object.MinecraftServerProfileObject.key} /opt/minecraft_server_profiles/
+  #               # Pull the start service from S3
+  #               aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/services/${aws_s3_object.MinecraftStartServerServiceObject.key} /etc/systemd/system/start-server.service
 
-#                 # Setup the profile
-#                 unzip /opt/minecraft_server_profiles/${aws_s3_object.MinecraftServerProfileObject.key} \ 
-#                 -d ${replace("/opt/minecraft_servers/${aws_s3_object.MinecraftServerProfileObject.key}", ".zip", "")}
+  #               # Enable the services to run at startup
+  #               systemctl enable start-server.service
 
-#                 # Run the java install script
-#                 chmod +x /opt/minecraft_servers/${replace(aws_s3_object.MinecraftServerProfileObject.key, ".zip", "")}/install_java.sh
-#                 bash /opt/minecraft_servers/${replace(aws_s3_object.MinecraftServerProfileObject.key, ".zip", "")}/install_java.sh
+  #               # Download the Minecraft Profile from S3
+  #               aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/profiles/${aws_s3_object.MinecraftServerProfileObject.key} /opt/minecraft_server_profiles/
 
-#                 EOF
-# }
+  #               # Setup the profile
+  #               unzip /opt/minecraft_server_profiles/${aws_s3_object.MinecraftServerProfileObject.key} \ 
+  #               -d ${replace("/opt/minecraft_servers/${aws_s3_object.MinecraftServerProfileObject.key}", ".zip", "")}
 
+  #               # Run the java install script
+  #               chmod +x /opt/minecraft_servers/${replace(aws_s3_object.MinecraftServerProfileObject.key, ".zip", "")}/install_java.sh
+  #               bash /opt/minecraft_servers/${replace(aws_s3_object.MinecraftServerProfileObject.key, ".zip", "")}/install_java.sh
 
-# resource "aws_instance" "MinecraftEC2Instance" {
-#   instance_type = "t4g.large"
-#   ami           = data.aws_ami.Ubuntu2404AMI.id
-#   user_data     = var.MinecraftEC2InstanceUserData.default
+  #               EOF
 
-
-#   tags = {
-#     IsMinecraftInstance = "true"
-#   }
-# }
+  tags = {
+    # Used to identify instances that are part of the Minecraft server infrastructure
+    "IsMinecraftServer" = "true"
+  }
+}

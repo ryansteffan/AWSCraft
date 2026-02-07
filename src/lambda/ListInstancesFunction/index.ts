@@ -37,12 +37,12 @@ export const handler = async (
 
 	// List only the instances that have the tag "minecraft" set to "true"
 	const command = new DescribeInstancesCommand({
-		// Filters: [
-		// 	{
-		// 		Name: "tag:minecraft",
-		// 		Values: ["true"],
-		// 	},
-		// ],
+		Filters: [
+			{
+				Name: "tag:IsMinecraftServer",
+				Values: ["true"],
+			},
+		],
 	});
 	const response = await ec2Client.send(command);
 
