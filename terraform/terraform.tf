@@ -377,7 +377,7 @@ data "aws_ami" "Ubuntu2404AMI" {
 resource "aws_instance" "MinecraftServerInstance" {
   ami               = data.aws_ami.Ubuntu2404AMI.id
   instance_type     = var.InstanceType
-  availability_zone = var.AvailabilityZone
+  availability_zone = "${var.Region}${var.AvailabilityZone}"
 
   root_block_device {
     volume_size           = var.EBSSize

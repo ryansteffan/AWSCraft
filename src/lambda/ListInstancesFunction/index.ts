@@ -1,10 +1,16 @@
 import { Context, APIGatewayProxyResult, APIGatewayEvent } from "aws-lambda";
-import { DescribeInstancesCommand, EC2Client } from "@aws-sdk/client-ec2";
+import {
+	DescribeInstancesCommand,
+	EC2Client,
+	TagSpecification$,
+} from "@aws-sdk/client-ec2";
 
 interface Instance {
 	instanceId: string;
 	name: string;
 	description: string;
+	ipAddress: string | undefined;
+	publicDNS: string | undefined;
 }
 
 interface Response {
@@ -28,11 +34,8 @@ export const handler = async (
 		};
 	}
 
-	// TODO: Remove debug log
-	console.log(process.env.AWS_REGION);
-
 	const ec2Client = new EC2Client({
-		region: process.env.AWS_REGION || "us-east-1",
+		region: process.env.AWS_REGION,
 	});
 
 	// List only the instances that have the tag "minecraft" set to "true"
@@ -50,11 +53,17 @@ export const handler = async (
 	response.Reservations?.forEach((reservation) => {
 		// TODO: Extract Name and Description from tags
 		reservation.Instances?.forEach((instance) => {
-			return {
+			instances.push({
 				instanceId: instance.InstanceId || "Unknown",
-				name: "",
-				description: "",
-			} satisfies Instance;
+				name:
+					instance.Tags?.find((tag) => tag.Key === "Name")?.Value ||
+					"Unknown",
+				description:
+					instance.Tags?.find((tag) => tag.Key === "Description")
+						?.Value || "No description",
+				ipAddress: instance.PublicIpAddress,
+				publicDNS: instance.PublicDnsName,
+			} satisfies Instance);
 		});
 	});
 
