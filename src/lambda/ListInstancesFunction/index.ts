@@ -71,8 +71,8 @@ export const handler = async (
 					instance.Tags?.find((tag) => tag.Key === "Description")
 						?.Value || "No description",
 				status: (instance.State?.Name as InstanceStatus) || "Unknown",
-				ipAddress: instance.PublicIpAddress,
-				publicDNS: instance.PublicDnsName,
+				ipAddress: instance.PublicIpAddress || undefined,
+				publicDNS: instance.PublicDnsName || undefined,
 			} satisfies Instance);
 		});
 	});
