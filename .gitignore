@@ -27,3 +27,5 @@ backup/
 __pycache__/
 *.pyc
 
+# Ignore SSH keys
+ssh/

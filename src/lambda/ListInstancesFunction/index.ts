@@ -1,9 +1,5 @@
 import { Context, APIGatewayProxyResult, APIGatewayEvent } from "aws-lambda";
-import {
-	DescribeInstancesCommand,
-	EC2Client,
-	TagSpecification$,
-} from "@aws-sdk/client-ec2";
+import { DescribeInstancesCommand, EC2Client } from "@aws-sdk/client-ec2";
 
 type InstanceStatus =
 	| "pending"
