@@ -257,7 +257,7 @@ data "aws_iam_policy_document" "MinecraftEC2S3AccessPolicyDocument" {
       "s3:DeleteObject"
     ]
 
-    resources = [aws_s3_bucket.MinecraftData.arn]
+    resources = [aws_s3_bucket.MinecraftData.arn, "${aws_s3_bucket.MinecraftData.arn}/*"]
   }
 }
 
@@ -589,14 +589,14 @@ resource "aws_instance" "MinecraftServerInstance" {
   associate_public_ip_address = true
   security_groups             = [aws_security_group.MinecraftServerSecurityGroup.id]
 
-  # Add the user data script to setup the server.
-  # user_data = templatefile("./user_data.sh", {
-  #   BucketName       = aws_s3_bucket.MinecraftData.bucket,
-  #   StartScriptKey   = aws_s3_object.MinecraftStartScriptObject.key,
-  #   StopScriptKey    = aws_s3_object.MinecraftStopScriptObject.key,
-  #   StartServiceKey  = aws_s3_object.MinecraftStartServerServiceObject.key,
-  #   ServerProfileKey = aws_s3_object.MinecraftServerProfile.key
-  # })
+  user_data = templatefile(
+    "user_data.sh",
+    {
+      s3_bucket          = aws_s3_bucket.MinecraftData.bucket,
+      service_key        = aws_s3_object.MinecraftStartServerServiceObject.key,
+      server_profile_key = aws_s3_object.MinecraftServerProfile.key,
+    }
+  )
 
   # user_data     = <<-EOF
   #               #!/bin/bash

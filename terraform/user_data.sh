@@ -2,28 +2,30 @@
 
 # Update and install necessary packages
 apt-get update -y
-apt-get install -y awscli unzip python3
+apt-get install -y unzip python3
+snap install aws-cli --classic
 
 # Pull the start script from S3
-aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/scripts/start-server.sh /home/ubuntu/start-server.sh
+aws s3 cp s3://${s3_bucket}/scripts/start-server.sh /home/ubuntu/start-server.sh
 chmod +x /home/ubuntu/start-server.sh
 
 # Pull the stop script from S3
-aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/scripts/stop-server.py /home/ubuntu/stop-server.py
+aws s3 cp s3://${s3_bucket}/scripts/stop-server.py /home/ubuntu/stop-server.py
 chmod +x /home/ubuntu/stop-server.py
 
 # Pull the start service from S3
-aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/services/${aws_s3_object.MinecraftStartServerServiceObject.key} /etc/systemd/system/start-server.service
+aws s3 cp s3://${s3_bucket}/services/${service_key} /etc/systemd/system/start-server.service
   
 # Enable the services to run at startup
 systemctl enable start-server.service
+systemctl start start-server.service
 
 # Download the Minecraft Profile from S3
-aws s3 cp s3://${aws_s3_bucket.MinecraftData.bucket}/profiles/${aws_s3_object.MinecraftServerProfileObject.key} /opt/minecraft_server_profiles/
+aws s3 cp s3://${s3_bucket}/profiles/${server_profile_key} /opt/minecraft_server_profiles/
 
 # Setup the profile
-unzip /opt/minecraft_server_profiles/${aws_s3_object.MinecraftServerProfileObject.key} -d ${replace("/opt/minecraft_servers/${aws_s3_object.MinecraftServerProfileObject.key}", ".zip", "")}
+unzip /opt/minecraft_server_profiles/${server_profile_key} -d ${replace("/opt/minecraft_servers/${server_profile_key}", ".zip", "")}
 
 # Run the java install script
-chmod +x /opt/minecraft_servers/${replace(aws_s3_object.MinecraftServerProfileObject.key, ".zip", "")}/install_java.sh
-bash /opt/minecraft_servers/${replace(aws_s3_object.MinecraftServerProfileObject.key, ".zip", "")}/install_java.sh
+# chmod +x /opt/minecraft_servers/${replace(server_profile_key, ".zip", "")}/install_java.sh
+# bash /opt/minecraft_servers/${replace(server_profile_key, ".zip", "")}/install_java.sh
