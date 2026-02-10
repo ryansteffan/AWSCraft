@@ -605,5 +605,3 @@ resource "aws_instance" "MinecraftServerInstance" {
     "Description"       = var.MinecraftServerDescription
   }
 }
-
-
