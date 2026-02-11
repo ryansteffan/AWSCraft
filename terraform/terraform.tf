@@ -604,3 +604,21 @@ resource "aws_instance" "MinecraftServerInstance" {
     "Description"       = var.MinecraftServerDescription
   }
 }
+
+output "PostDeploymentReport" {
+  value = <<EOT
+
+  ----------------------
+  POST DEPLOYMENT REPORT
+  ----------------------
+
+  Your AWSCraft infrastructure has been deployed!
+
+  Here is the details of your deployment:
+  - API Gateway URL: https://${aws_apigatewayv2_stage.MinecraftAPIProductionStage.invoke_url}
+  - S3 Bucket Name: ${aws_s3_bucket.MinecraftData.bucket}
+  - EC2 Instance ID: ${aws_instance.MinecraftServerInstance.id}
+  - EC2 Instance Public IP: ${aws_instance.MinecraftServerInstance.public_ip}
+  - EC2 Instance Public DNS: ${aws_instance.MinecraftServerInstance.public_dns}
+  EOT 
+}

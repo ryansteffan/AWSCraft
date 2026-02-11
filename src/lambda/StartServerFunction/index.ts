@@ -11,7 +11,7 @@ export interface Response {
 }
 
 export interface POSTRequestBody {
-	serverId: string;
+	instanceId: string;
 }
 
 export const handler = async (
@@ -31,7 +31,7 @@ export const handler = async (
 	const requestBody: POSTRequestBody = JSON.parse(
 		event.body || "{}",
 	) as POSTRequestBody;
-	if (!requestBody.serverId || typeof requestBody.serverId !== "string") {
+	if (!requestBody.instanceId || typeof requestBody.instanceId !== "string") {
 		return {
 			statusCode: 400,
 			body: JSON.stringify({
@@ -46,7 +46,7 @@ export const handler = async (
 	try {
 		// Check if the instance is a minecraft server.
 		const describeCommand = new DescribeInstancesCommand({
-			InstanceIds: [requestBody.serverId],
+			InstanceIds: [requestBody.instanceId],
 		});
 
 		const describedInstances = await ec2Client.send(describeCommand);
@@ -79,7 +79,7 @@ export const handler = async (
 
 		// Start the instance.
 		const command = new StartInstancesCommand({
-			InstanceIds: [requestBody.serverId],
+			InstanceIds: [requestBody.instanceId],
 		});
 
 		const response = await ec2Client.send(command);
