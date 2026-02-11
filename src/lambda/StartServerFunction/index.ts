@@ -36,7 +36,7 @@ export const handler = async (
 			statusCode: 400,
 			body: JSON.stringify({
 				success: false,
-				message: "Invalid serverId: It must be a non-empty string.",
+				message: "Invalid instanceId: It must be a non-empty string.",
 			} satisfies Response),
 		};
 	}

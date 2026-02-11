@@ -206,6 +206,9 @@ data "aws_iam_policy_document" "LambdaEC2AccessPolicyDocument" {
 
     actions = [
       "ec2:DescribeInstances",
+      "ec2:StartInstances",
+      "ec2:StopInstances",
+      "ec2:RebootInstances"
     ]
 
     resources = ["*"]
@@ -615,7 +618,7 @@ output "PostDeploymentReport" {
   Your AWSCraft infrastructure has been deployed!
 
   Here is the details of your deployment:
-  - API Gateway URL: https://${aws_apigatewayv2_stage.MinecraftAPIProductionStage.invoke_url}
+  - API Gateway URL: ${aws_apigatewayv2_stage.MinecraftAPIProductionStage.invoke_url}
   - S3 Bucket Name: ${aws_s3_bucket.MinecraftData.bucket}
   - EC2 Instance ID: ${aws_instance.MinecraftServerInstance.id}
   - EC2 Instance Public IP: ${aws_instance.MinecraftServerInstance.public_ip}
