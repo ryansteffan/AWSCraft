@@ -460,7 +460,6 @@ resource "aws_apigatewayv2_route" "ServerStatusEndpoint" {
 
   target = "integrations/${aws_apigatewayv2_integration.ServerStatusIntegration.id}"
 }
-
 resource "aws_apigatewayv2_route" "StartServerEndpoint" {
   api_id    = aws_apigatewayv2_api.MinecraftAPI.id
   route_key = "POST /start"
