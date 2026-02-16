@@ -14,6 +14,7 @@ minecraft_scripts_dir="$minecraft_dir/scripts"
 default_profile_name="DefaultMinecraftProfile"
 bootstrap_start_script="$minecraft_scripts_dir/start-server.sh"
 stop_script="$minecraft_scripts_dir/stop-server.py"
+server_properties_file="$minecraft_servers_dir/$default_profile_name/server.properties"
 username="minecraft"
 
 # Create the required directories
@@ -51,6 +52,14 @@ sudo chmod 755 $server_start_script
 sudo chmod +x $extract_path/install-java.sh
 sudo $extract_path/install-java.sh
 
+# Create a secret for the RCON configuration
+rcon_secret=$(openssl rand -hex 16)
+
+# Update the server.properties file with the RCON configuration
+sudo sed -i "s/^rcon.password=.*/rcon.password=$rcon_secret/" $server_properties_file
+sudo sed -i "s/^enable-rcon=.*/enable-rcon=true/" $server_properties_file
+sudo sed -i "s/^rcon.port=.*/rcon.port=25575/" $server_properties_file
+
 # Dump the variables to a file for use in the start script
 echo "
 #! /bin/bash
@@ -63,6 +72,7 @@ export DEFAULT_PROFILE_NAME=$default_profile_name
 export START_SCRIPT=$server_start_script
 export STOP_SCRIPT=$stop_script
 export SERVER_JAR=$extract_path/server.jar
+export RCON_SECRET=$rcon_secret
 " > $minecraft_dir/env-vars.sh
 
 # Set permissions for the Minecraft user

@@ -17,9 +17,12 @@ import struct
 import subprocess
 import psutil
 
-PLAYER_CHECK_INTERVAL = int(os.getenv("PLAYER_CHECK_INTERVAL", "60"))
+PLAYER_CHECK_INTERVAL = int(os.getenv("PLAYER_CHECK_INTERVAL", "120"))
 SERVER_PID = int(os.getenv("SERVER_PID", "-1"))
 INSTANCE_ID = os.getenv("INSTANCE_ID", "i-0123456789abcdef0")
+RCON_SECRET = os.getenv("RCON_SECRET")
+RCON_PORT = int(os.getenv("RCON_PORT", "-1"))
+
 
 # Constants for VarInt encoding/decoding
 SEGMENT_BITS = b'\x7F'[0] 
@@ -198,7 +201,7 @@ async def stop_server_command():
     """
     host = os.getenv("RCON_HOST", "localhost")
     port = int(os.getenv("RCON_PORT", "25575"))
-    password = os.getenv("RCON_PASSWORD", "123456")
+    password = os.getenv("RCON_SECRET", "123456")
 
     try:
         reader, writer = await asyncio.open_connection(host, port)
@@ -212,7 +215,7 @@ async def stop_server_command():
 
         # On auth failure, the server responds with request id = -1.
         if auth_id == -1:
-            raise PermissionError("RCON authentication failed (request id = -1). Check rcon.password")
+            raise PermissionError("RCON authentication failed (request id = -1). Check RCON_SECRET")
 
         if auth_id != auth_request_id or auth_type != 2:
             raise PermissionError("Unexpected RCON auth response. Check RCON port/password and server config.")
@@ -247,29 +250,27 @@ async def rcon_send_and_recv(
     resp_payload = data[8:payload_end].decode("ascii", errors="replace") if payload_end != -1 else ""
     return resp_id, resp_type, resp_payload
 
+
 async def RunAWSStopInstance():
     """
     Stops the EC2 instance using AWS CLI.
     """
     try:
-        subprocess.run(["awscli", "ec2", "stop-instances", "--instance-ids", INSTANCE_ID], check=True)
+        print(f"Stopping EC2 instance {INSTANCE_ID}...")
+        subprocess.run(["aws", "ec2", "stop-instances", "--instance-ids", INSTANCE_ID], check=True)
     except subprocess.CalledProcessError as e:
         print(f"Failed to stop EC2 instance: {e}")
         print("Halting the server instead.")
-        subprocess.run(["shutdown", "-h", "now"])
+        subprocess.run(["sudo", "shutdown", "-h", "now"])
 
 async def main():
     await run_player_count_client()
 
-    is_server_running = True
-    while is_server_running:
-        is_server_running = True
-        while is_server_running:
-            await asyncio.sleep(2)
-            for proc in psutil.process_iter(['pid']):
-                if proc.info['pid'] == SERVER_PID:
-                    is_server_running = True
-                    break
+    # Wait for the server process to exit before stopping the EC2 instance
+    while True:
+        await asyncio.sleep(2)
+        if not psutil.pid_exists(SERVER_PID):
+            break
 
     await RunAWSStopInstance()
     exit(0)    

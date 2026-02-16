@@ -264,6 +264,19 @@ data "aws_iam_policy_document" "MinecraftEC2S3AccessPolicyDocument" {
   }
 }
 
+data "aws_iam_policy_document" "MinecraftEC2SelfShutdownPolicyDocument" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ec2:StopInstances"
+    ]
+
+    # Only allow the EC2 instance to stop itself
+    resources = [aws_instance.MinecraftServerInstance.arn]
+  }
+}
+
 # Create the IAM role for EC2 to have access to S3
 resource "aws_iam_role" "MinecraftEC2Role" {
   name               = "MinecraftEC2Role"
@@ -275,6 +288,13 @@ resource "aws_iam_role_policy" "MinecraftEC2S3AccessRolePolicy" {
   name   = "MinecraftEC2S3AccessRolePolicy"
   role   = aws_iam_role.MinecraftEC2Role.id
   policy = data.aws_iam_policy_document.MinecraftEC2S3AccessPolicyDocument.json
+}
+
+# Attach the self shutdown policy to the EC2 role
+resource "aws_iam_role_policy" "MinecraftEC2SelfShutdownRolePolicy" {
+  name   = "MinecraftEC2SelfShutdownRolePolicy"
+  role   = aws_iam_role.MinecraftEC2Role.id
+  policy = data.aws_iam_policy_document.MinecraftEC2SelfShutdownPolicyDocument.json
 }
 
 # ------------------------------------------
