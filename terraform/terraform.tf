@@ -561,13 +561,13 @@ resource "aws_iam_instance_profile" "MinecraftEC2InstanceIAMProfile" {
 }
 
 # Create ssh keys for the EC2 instance
-resource "aws_key_pair" "MinecraftEC2KeyPair" {
-  public_key = file("../ssh/minecraft_key.pub")
+# resource "aws_key_pair" "MinecraftEC2KeyPair" {
+#   public_key = file("../ssh/minecraft_key.pub")
 
-  tags = {
-    "Name" = "MinecraftServerKeyPair"
-  }
-}
+#   tags = {
+#     "Name" = "MinecraftServerKeyPair"
+#   }
+# }
 
 # Create the EC2 instance for the Minecraft server
 resource "aws_instance" "MinecraftServerInstance" {
@@ -575,7 +575,7 @@ resource "aws_instance" "MinecraftServerInstance" {
   instance_type        = var.InstanceType
   availability_zone    = "${var.Region}${var.AvailabilityZone}"
   iam_instance_profile = aws_iam_instance_profile.MinecraftEC2InstanceIAMProfile.name
-  key_name             = aws_key_pair.MinecraftEC2KeyPair.key_name
+  # key_name             = aws_key_pair.MinecraftEC2KeyPair.key_name
 
   root_block_device {
     volume_size           = var.EBSSize
@@ -594,9 +594,7 @@ resource "aws_instance" "MinecraftServerInstance" {
   user_data = templatefile(
     "user_data.sh",
     {
-      s3_bucket                = aws_s3_bucket.MinecraftData.bucket,
-      start_server_service     = aws_s3_object.MinecraftStartServerServiceObject.key,
-      minecraft_server_profile = aws_s3_object.MinecraftServerProfile.key,
+      s3_bucket = aws_s3_bucket.MinecraftData.bucket,
     }
   )
 

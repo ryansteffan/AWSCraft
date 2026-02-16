@@ -29,3 +29,6 @@ __pycache__/
 
 # Ignore SSH keys
 ssh/
+
+# Ignore venv
+.venv/

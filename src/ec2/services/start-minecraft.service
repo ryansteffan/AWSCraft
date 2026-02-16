@@ -1,12 +1,13 @@
 [Unit]
-Description=Runs the minecraft server start script.
-After=network.target
+Description=AWSCraft Minecraft server bootstrap service
 Wants=network-online.target
 
 [Service]
-Restart=on-failure
 Type=simple
-ExecStart=/bin/bash /opt/start-server.sh
+User=minecraft
+Group=minecraft
+WorkingDirectory=/opt/minecraft
+ExecStart=/bin/bash /opt/minecraft/scripts/start-server.sh
 
 [Install]
-WantedBy=multi-user.target 
+WantedBy=multi-user.target
