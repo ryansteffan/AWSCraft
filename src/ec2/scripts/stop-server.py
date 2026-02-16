@@ -257,9 +257,14 @@ async def RunAWSStopInstance():
     """
     try:
         print(f"Stopping EC2 instance {INSTANCE_ID}...")
-        subprocess.run(["aws", "ec2", "stop-instances", "--instance-ids", INSTANCE_ID], check=True)
+        subprocess.run(
+            ["aws", "ec2", "stop-instances", "--instance-ids", INSTANCE_ID], 
+            text=True, 
+            check=True, 
+            capture_output=True
+            )
     except subprocess.CalledProcessError as e:
-        print(f"Failed to stop EC2 instance: {e}")
+        print(f"Failed to stop EC2 instance: {e.stderr}")
         print("Halting the server instead.")
         subprocess.run(["sudo", "shutdown", "-h", "now"])
 

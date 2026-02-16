@@ -3,7 +3,14 @@
 # Update and install necessary packages
 apt-get update -y
 apt-get install -y unzip python3 python3-psutil dos2unix
-snap install aws-cli --classic
+# snap install aws-cli --classic
+
+# Install AWS CLI v2
+arch=$(uname -m)
+curl "https://awscli.amazonaws.com/awscli-exe-linux-$arch.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+
 
 # Define variables
 s3_bucket=${s3_bucket}
