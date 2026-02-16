@@ -24,6 +24,24 @@ def main():
     if not os.path.exists(SERVER_DIR):
         print(f"Creating server directory at {SERVER_DIR}...")
         os.makedirs(SERVER_DIR)
+        with open(os.path.join(SERVER_DIR, "start-server.sh"), "w") as f:
+            f.write("#!/bin/bash\n" +
+            "echo 'This is a placeholder start script for your Minecraft server.'\n" +
+            "echo 'Please replace this with your actual server start command.'\n" +
+            "echo 'Example: java -Xmx1024M -Xms1024M -jar server.jar nogui'\n")
+        
+        with open(os.path.join(SERVER_DIR, "install-java.sh"), "w") as f:
+            f.write("#!/bin/bash\n" +
+            "echo 'This is a placeholder script for installing Java.'\n" +
+            "echo 'Please replace this with your actual Java installation commands.'\n")
+
+        with open(os.path.join(SERVER_DIR, "README.txt"), "w") as f:
+            f.write("This directory is meant for your Minecraft server files.\n" +
+            "Please place your server.jar and any other necessary files here.\n" +
+            "The start-server.sh script is a placeholder and should be replaced with your actual server start command.\n" +
+            "The install-java.sh script is a placeholder and should be replaced with your actual Java installation commands.\n" +
+            "Make sure that the server is ready to run before deploying, as the deployment process will attempt to start the" +
+            "server after deployment.\n")
         print(
             f"Please setup your server in {SERVER_DIR}.\n" +
             "Once done, re-run this script.")

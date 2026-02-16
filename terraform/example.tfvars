@@ -9,10 +9,33 @@
 Region = "ca-central-1"
 
 # The globally unique name for the S3 bucket used to store data used to deploy the infrastructure.
-BucketName = "globally-unique-bucket-name"
+BucketName = "my-awscraft-bucket"
 
 # EC2 Instance type
 # For a list of instance types, see: 
 # https://instances.vantage.sh/
 InstanceType = "m7i-flex.large"
+
+# The architecture of the EC2 instance. This is used to select the correct AMI for the instance.
+# It is important that this matches the architecture of the InstanceType you are using.
+# If it is not correct, an invalid AMI will be selected and the EC2 instance will fail to launch.
+Architecture = "amd64"
+
+# The availability zone to deploy the EC2 instance in.
+# Generally valid values are "a", "b", "c", etc. depending on the region you are deploying in.
+AvailabilityZone = "a"
+
+# The amount of storage (in GB) to allocate for the EBS volume attached to the EC2 instance. 
+# This is used to store the Minecraft server data.
+EBSSize = 15
+
+# The name, description, and port for the Minecraft server. 
+# These values are what the server will be described as when the API is used to 
+# query the server information.
+MinecraftServerName        = "My Minecraft Server"
+MinecraftServerDescription = "A Minecraft server deployed on AWS using AWSCraft."
+
+# The port to open for the minecraft server to allow players to connect through the firewall.
+# This must be the same as what you have configured in the server.properties file for your Minecraft server.
+MinecraftServerPort = 25565
 
