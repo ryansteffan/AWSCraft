@@ -38,4 +38,3 @@ MinecraftServerDescription = "A Minecraft server deployed on AWS using AWSCraft.
 # The port to open for the minecraft server to allow players to connect through the firewall.
 # This must be the same as what you have configured in the server.properties file for your Minecraft server.
 MinecraftServerPort = 25565
-

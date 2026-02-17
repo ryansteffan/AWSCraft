@@ -17,7 +17,7 @@ import struct
 import subprocess
 import psutil
 
-PLAYER_CHECK_INTERVAL = int(os.getenv("PLAYER_CHECK_INTERVAL", "120"))
+PLAYER_CHECK_INTERVAL = int(os.getenv("PLAYER_CHECK_INTERVAL", "180"))
 SERVER_PID = int(os.getenv("SERVER_PID", "-1"))
 INSTANCE_ID = os.getenv("INSTANCE_ID", "i-0123456789abcdef0")
 RCON_SECRET = os.getenv("RCON_SECRET")

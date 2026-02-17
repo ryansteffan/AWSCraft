@@ -1,0 +1,46 @@
+# This predefined usage file attempts to set each usage-based cost as
+# $20/month for common configurations, helping engineers understand that
+# these resources are not free.
+# See docs: https://infracost.io/usage-file/
+version: 0.1
+
+# Assumptions:
+# - ~6 sessions/month (average of 1–2 per week)
+# - ~4.5 hours/session => ~27 EC2 runtime hours/month
+# - light API usage for start/status/list around play sessions
+
+resource_usage:
+  aws_instance.MinecraftServerInstance:
+    monthly_hrs: 35
+
+  aws_apigatewayv2_api.MinecraftAPI:
+    monthly_requests: 6500
+    request_size_kb: 4
+    monthly_messages: 0
+    message_size_kb: 32
+    monthly_connection_mins: 0
+
+  aws_lambda_function.ListInstancesFunction:
+    monthly_requests: 2000
+    request_duration_ms: 120
+
+  aws_lambda_function.ServerStatusFunction:
+    monthly_requests: 4400
+    request_duration_ms: 120
+
+  aws_lambda_function.StartServerFunction:
+    monthly_requests: 100
+    request_duration_ms: 1200
+
+  aws_cloudwatch_log_group.MinecraftLambdaLogGroup:
+    monthly_data_ingested_gb: 0.03
+    storage_gb: 0.02
+    monthly_data_scanned_gb: 0.05
+
+  aws_s3_bucket.MinecraftData:
+    standard:
+      storage_gb: 3
+      monthly_tier_1_requests: 2500
+      monthly_tier_2_requests: 8000
+      monthly_select_data_scanned_gb: 0
+      monthly_select_data_returned_gb: 0

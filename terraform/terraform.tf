@@ -439,8 +439,6 @@ resource "aws_lambda_function" "StartServerFunction" {
 # Setup API Gateway for Minecraft Server Management
 # -------------------------------------------------
 
-# Set up the domain name for the API Gateway
-
 # Create the api routes
 resource "aws_apigatewayv2_api" "MinecraftAPI" {
   name          = "MinecraftAPI"

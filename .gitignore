@@ -32,3 +32,6 @@ ssh/
 
 # Ignore venv
 .venv/
+
+# Ignore infracost files
+terraform/.infracost/
