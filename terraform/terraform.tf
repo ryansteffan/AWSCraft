@@ -63,6 +63,23 @@ variable "EBSSize" {
   description = "The size of the EBS volume attached to the EC2 instance in GB."
 }
 
+variable "EnableAuth" {
+  type        = bool
+  description = "Whether to setup Cognito for authentication. If false, the API will be open to the public and anyone can access it."
+  default     = false
+}
+
+variable "AdminEmailAddress" {
+  type        = string
+  description = "The email address to use for the default admin user in the Cognito user pool. This is only used if EnableAuth is true."
+}
+
+variable "AdminPassword" {
+  type        = string
+  sensitive   = true
+  description = "The temporary password for the default admin user in the Cognito user pool. This is only used if EnableAuth is true."
+}
+
 # ----------------------------------------------------
 # Create a VPC for the Minecraft server infrastructure
 # ----------------------------------------------------
@@ -154,6 +171,16 @@ resource "aws_route_table_association" "MinecraftPrivateSubnetRouteTableAssociat
 resource "aws_route_table_association" "MinecraftPublicSubnetRouteTableAssociation" {
   subnet_id      = aws_subnet.MinecraftPublicSubnet.id
   route_table_id = aws_route_table.MinecraftPublicSubnetRouteTable.id
+}
+
+# --------------------------------
+# Setup Cognito if auth is enabled
+# --------------------------------
+module "MinecraftAPIAuth" {
+  source                 = "./modules/auth"
+  count                  = var.EnableAuth ? 1 : 0
+  MinecraftAdminUsername = var.AdminEmailAddress
+  MinecraftAdminPassword = var.AdminPassword
 }
 
 # ----------------------------------
@@ -446,6 +473,19 @@ resource "aws_apigatewayv2_api" "MinecraftAPI" {
   protocol_type = "HTTP"
 }
 
+# Create an authorizer for the API if auth is enabled
+resource "aws_apigatewayv2_authorizer" "MinecraftAPIAuthorizer" {
+  count            = var.EnableAuth ? 1 : 0
+  name             = "MinecraftAPIAuthorizer"
+  authorizer_type  = "JWT"
+  api_id           = aws_apigatewayv2_api.MinecraftAPI.id
+  identity_sources = ["$request.header.Authorization"]
+  jwt_configuration {
+    audience = [module.MinecraftAPIAuth[0].MinecraftPKCEClientID]
+    issuer   = format("https://%s", module.MinecraftAPIAuth[0].MinecraftUserPoolEndpoint)
+  }
+}
+
 # Attache the routes to lambda functions
 resource "aws_apigatewayv2_integration" "ListInstancesIntegration" {
   api_id             = aws_apigatewayv2_api.MinecraftAPI.id
@@ -469,21 +509,28 @@ resource "aws_apigatewayv2_integration" "StartServerIntegration" {
 }
 
 resource "aws_apigatewayv2_route" "ListInstancesEndpoint" {
-  api_id    = aws_apigatewayv2_api.MinecraftAPI.id
-  route_key = "GET /list-instances"
+  api_id             = aws_apigatewayv2_api.MinecraftAPI.id
+  route_key          = "GET /api/list-instances"
+  authorization_type = var.EnableAuth ? "JWT" : "NONE"
+  authorizer_id      = var.EnableAuth ? aws_apigatewayv2_authorizer.MinecraftAPIAuthorizer[0].id : null
 
   target = "integrations/${aws_apigatewayv2_integration.ListInstancesIntegration.id}"
 }
 
 resource "aws_apigatewayv2_route" "ServerStatusEndpoint" {
-  api_id    = aws_apigatewayv2_api.MinecraftAPI.id
-  route_key = "GET /status"
+  api_id             = aws_apigatewayv2_api.MinecraftAPI.id
+  route_key          = "GET /api/status"
+  authorization_type = var.EnableAuth ? "JWT" : "NONE"
+  authorizer_id      = var.EnableAuth ? aws_apigatewayv2_authorizer.MinecraftAPIAuthorizer[0].id : null
 
   target = "integrations/${aws_apigatewayv2_integration.ServerStatusIntegration.id}"
 }
+
 resource "aws_apigatewayv2_route" "StartServerEndpoint" {
-  api_id    = aws_apigatewayv2_api.MinecraftAPI.id
-  route_key = "POST /start"
+  api_id             = aws_apigatewayv2_api.MinecraftAPI.id
+  route_key          = "POST /api/start"
+  authorization_type = var.EnableAuth ? "JWT" : "NONE"
+  authorizer_id      = var.EnableAuth ? aws_apigatewayv2_authorizer.MinecraftAPIAuthorizer[0].id : null
 
   target = "integrations/${aws_apigatewayv2_integration.StartServerIntegration.id}"
 }
@@ -620,7 +667,7 @@ resource "aws_instance" "MinecraftServerInstance" {
     # Used to identify instances that are part of the Minecraft server infrastructure
     "IsMinecraftServer" = "true",
     "Name"              = var.MinecraftServerName,
-    "Description"       = var.MinecraftServerDescription
+    "Description"       = var.MinecraftServerDescription,
   }
 }
 
@@ -635,6 +682,8 @@ output "PostDeploymentReport" {
 
   Here is the details of your deployment:
   - API Gateway URL: ${aws_apigatewayv2_stage.MinecraftAPIProductionStage.invoke_url}
+  - API Gateway Authorizer Enabled: ${var.EnableAuth ? "Yes" : "No"}
+  - Cognito User Pool Endpoint: ${var.EnableAuth ? module.MinecraftAPIAuth[0].MinecraftUserPoolEndpoint : "N/A"}
   - S3 Bucket Name: ${aws_s3_bucket.MinecraftData.bucket}
   - EC2 Instance ID: ${aws_instance.MinecraftServerInstance.id}
   - EC2 Instance Public IP: ${aws_instance.MinecraftServerInstance.public_ip}

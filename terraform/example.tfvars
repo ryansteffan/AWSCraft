@@ -38,3 +38,16 @@ MinecraftServerDescription = "A Minecraft server deployed on AWS using AWSCraft.
 # The port to open for the minecraft server to allow players to connect through the firewall.
 # This must be the same as what you have configured in the server.properties file for your Minecraft server.
 MinecraftServerPort = 25565
+
+# Enable support for API authentication using AWS Cognito.
+# When this is set to true, a Cognito User Pool will be created to manage users who have access to the Minecraft server, and the API Gateway will be configured to use this user pool for authentication.
+# When false the API will be treated as public and allow for anyone to call it.
+EnableAuth = true
+
+# The email address to use for the default admin user in the Cognito User Pool. 
+# This user will be added to the admin group and can be used to log in and manage the server through the API.
+AdminEmailAddress = "example@example.com"
+
+# The temporary password for the default admin user in the Cognito User Pool. 
+# This should be changed immediately after the first login to ensure the security of the admin account.
+AdminPassword = "examplePassword123!"
