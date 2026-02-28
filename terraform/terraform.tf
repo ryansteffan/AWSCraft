@@ -80,6 +80,18 @@ variable "AdminPassword" {
   description = "The temporary password for the default admin user in the Cognito user pool. This is only used if EnableAuth is true."
 }
 
+variable "EnableWebUI" {
+  type        = bool
+  description = "Whether to deploy the web UI for managing the Minecraft server. If false, only the API will be deployed and the web UI will not be accessible."
+  default     = false
+}
+
+variable "WebUIAllowedRegions" {
+  type        = list(string)
+  description = "A list of country codes to allow access to the web UI. This is used to configure the geo restriction settings for the CloudFront distribution. For a list of country codes, see: https://en.wikipedia.org/wiki/ISO_3166-1"
+  default     = ["US", "CA"]
+}
+
 # ----------------------------------------------------
 # Create a VPC for the Minecraft server infrastructure
 # ----------------------------------------------------
@@ -670,6 +682,19 @@ resource "aws_instance" "MinecraftServerInstance" {
     "Description"       = var.MinecraftServerDescription,
   }
 }
+
+# -------------------------
+# Enabled WebUI if selected
+# -------------------------
+module "MinecraftWebUI" {
+  source = "./modules/webui"
+  count  = var.EnableWebUI ? 1 : 0
+
+  MinecraftWebUIBucketName = "my-test-awscraft-webui-bucket"
+  MinecraftWebUIBuildDir   = "../src/webui/out"
+  WebUIAllowedRegions      = var.WebUIAllowedRegions
+}
+
 
 output "PostDeploymentReport" {
   value = <<EOT

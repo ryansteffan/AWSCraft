@@ -51,3 +51,7 @@ AdminEmailAddress = "example@example.com"
 # The temporary password for the default admin user in the Cognito User Pool. 
 # This should be changed immediately after the first login to ensure the security of the admin account.
 AdminPassword = "examplePassword123!"
+
+EnableWebUI = true
+
+WebUIBucketName = "my-awscraft-webui-bucket"

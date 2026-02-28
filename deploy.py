@@ -8,7 +8,7 @@ from utils import Check_Command_Availability, Prompt_AWS_Login
 BUILD_DIR = "./build"
 SERVER_DIR = "./server"
 LAMBDA_DIR = "./src/lambda"
-WEBSITE_DIR = "./src/website"
+WEBSITE_DIR = "./src/webui"
 TERRAFORM_DIR = "./terraform"
 TERRAFORM_PLAN_NAME = "terraform.tfplan"
 # NOTE: Ensure that the BACKUP_DIR is changed in the ./destroy.py file as well
@@ -93,6 +93,7 @@ def main():
 
     print("Building website...")
     try:
+        print(f"Building website at {os.path.abspath(WEBSITE_DIR)}...")
         BuildWebsite(os.path.abspath(WEBSITE_DIR))
     except subprocess.CalledProcessError as e:
         print(f"Error building website: {e}")
@@ -172,13 +173,6 @@ def BuildWebsite(path: str):
 
     print("Building the website...")
     subprocess.run(["npm", "run", "build"], check=True, cwd=path, shell=True)
-    
-    # Copy the website to the build dir for deployment
-    if os.path.exists(os.path.join(BUILD_DIR, "website")):
-        shutil.rmtree(os.path.join(BUILD_DIR, "website"))
-
-    shutil.copytree(os.path.join(path, "out"), os.path.join(BUILD_DIR, "website"))
-    print("Website built and copied to build directory successfully.")
 
 
 if __name__ == "__main__":
