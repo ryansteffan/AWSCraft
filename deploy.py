@@ -8,6 +8,7 @@ from utils import Check_Command_Availability, Prompt_AWS_Login
 BUILD_DIR = "./build"
 SERVER_DIR = "./server"
 LAMBDA_DIR = "./src/lambda"
+WEBSITE_DIR = "./src/website"
 TERRAFORM_DIR = "./terraform"
 TERRAFORM_PLAN_NAME = "terraform.tfplan"
 # NOTE: Ensure that the BACKUP_DIR is changed in the ./destroy.py file as well
@@ -90,6 +91,14 @@ def main():
 
     print("All lambda functions built successfully.")
 
+    print("Building website...")
+    try:
+        BuildWebsite(os.path.abspath(WEBSITE_DIR))
+    except subprocess.CalledProcessError as e:
+        print(f"Error building website: {e}")
+        print("Aborting deployment process.")
+        return
+
     print("Building terraform plan...")
 
     print("Initializing terraform...")
@@ -150,6 +159,26 @@ def BuildLambdaFunction(path: str):
 
     print("Building the lambda function...")
     subprocess.run(["npm", "run", "build"], check=True, cwd=path, shell=True)
+
+
+def BuildWebsite(path: str):
+    # Cleanup the old build dir
+    if os.path.exists(os.path.join(path, "out")):
+        shutil.rmtree(os.path.join(path, "out"))
+
+    # Runs npm commands with shell=True for Windows compatibility
+    print("Installing npm dependencies for website...")
+    subprocess.run(["npm", "install"], check=True, cwd=path, shell=True)
+
+    print("Building the website...")
+    subprocess.run(["npm", "run", "build"], check=True, cwd=path, shell=True)
+    
+    # Copy the website to the build dir for deployment
+    if os.path.exists(os.path.join(BUILD_DIR, "website")):
+        shutil.rmtree(os.path.join(BUILD_DIR, "website"))
+
+    shutil.copytree(os.path.join(path, "out"), os.path.join(BUILD_DIR, "website"))
+    print("Website built and copied to build directory successfully.")
 
 
 if __name__ == "__main__":
